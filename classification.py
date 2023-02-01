@@ -25,12 +25,37 @@ class Classify(object):
         :param d: Distance metric. By default Mahalanobis, Euclidean can be requested by user.
         :return: pcc, fraction of correct classifications.
         """
-        n = len(self.X)
-        K = len(self.G[0])
+        n = len(X)
+        K = len(G[0])
         d2 = np.zeros([n, K])
         confmat = np.zeros([K, K])
-        muG = np.linalg.lstsq(self.G.T@self.G, self.G.T@self.X)
-        print(muG)
+        muG = np.linalg.lstsq(G.T@G, G.T@X, rcond=None)[0]
+        #print(type(muG))
+        Xc = np.zeros([n, len(X[0])])
+        for k in range(n):
+            if G[k][0] == 1:
+                Xc[k] = X[k] - muG[0]
+            else:
+                Xc[k] = X[k] - muG[1]
+        if d == "Mahalanobis":
+            Sinv = np.linalg.pinv(Xc.T @ Xc)
+            for i in range(n):
+                for c in range(K):
+                    d2[i, c] = (X[i] - muG[c])@Sinv@(X[i] - muG[c]).T
+        if d == "Euclidean":
+            for i in range(n):
+                for c in range(K):
+                    d2[i, c] = (X[i] - muG[c])@(X[i] - muG[c]).T
+
+        Ghat = np.argmin(d2, axis=1)
+        Gr = np.argmax(G, axis=1)
+        for i in range(n):
+            j = Gr[i]
+            k = Ghat[i]
+            confmat[j][k] = confmat[j][k] + 1
+        pcc = np.trace(confmat)/n
+        return confmat, pcc
+
 
 
 if __name__ == "__main__":
@@ -38,14 +63,12 @@ if __name__ == "__main__":
     file = "data/hotels.csv"
     data = pd.read_csv(file)
 
-
     # Wrangling. Removing the ID column and recoding the categorical variables
     meals = pd.get_dummies(data.type_of_meal_plan)
     rooms = pd.get_dummies(data.room_type_reserved)
     segment_mapping = {"Offline": 0, "Online": 1}
-    data = data.assign(market_segment_type=data.market_segment_type.map(segment_mapping))
     cancelled = pd.get_dummies(data.booking_status)
-    # Numeric data
+    # Numeric data, market_segment_type removed as it produced nan-values.
     n_data = pd.concat([data.no_of_adults,
                         data.no_of_children,
                         data.no_of_weekend_nights,
@@ -57,12 +80,17 @@ if __name__ == "__main__":
                         data.arrival_year,
                         data.arrival_month,
                         data.arrival_date,
-                        data.market_segment_type,
                         data.repeated_guest,
                         data.no_of_previous_cancellations,
                         data.avg_price_per_room,
                         data.no_of_special_requests],
                        axis=1,
                        join="inner")
+    X = n_data.to_numpy().astype(float)
+    G = cancelled.to_numpy().astype(float)
 
-    print(n_data.dtypes)
+
+    confmat, pcc = ins.LDA(X, G)
+    print(confmat)
+    print(pcc)
+
