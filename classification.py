@@ -18,7 +18,7 @@ class Classify(object):
 
 
 
-
+    def get_group
 
     def LDA(self, X, G, d="Mahalanobis"):
         """
@@ -54,7 +54,9 @@ class Classify(object):
             k = Ghat[i]
             confmat[j][k] = confmat[j][k] + 1
         pcc = np.trace(confmat)/n
-        return confmat, pcc
+        return confmat, pcc, muG
+
+    def train_test(self, X, G, muG):
 
 
 
@@ -90,7 +92,7 @@ if __name__ == "__main__":
     G = cancelled.to_numpy().astype(float)
 
 
-    confmat, pcc = ins.LDA(X, G)
+    confmat, pcc, muG = ins.LDA(X, G)
     print(confmat)
     print(pcc)
 
