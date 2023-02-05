@@ -9,13 +9,42 @@ LDA: Linear Discriminant Analysis.
 
 import numpy as np
 import pandas as pd
-from random import sample
+import random as rd
 
 
 class Classify(object):
 
     def __init__(self):
         pass
+
+    def distance(self, X, G, muG, d):
+        """
+
+        :param X: Data matrix from which function finds distances to group centers
+        :param G: Matrix of group memberships (dummy)
+        :param muG: Group centers
+        :param d: distance metric. Euclidean or Mahalanobis
+        :return: d2 - square distances of all mesurements in X to all group centers.
+
+        """
+        n = len(X)
+        d2 = np.zeros([n, self.K])
+        Xc = np.zeros([n, len(X[0])])
+        for k in range(n):
+            if G[k][0] == 1:
+                Xc[k] = X[k] - muG[0]
+            else:
+                Xc[k] = X[k] - muG[1]
+        if d == "Mahalanobis":
+            Sinv = np.linalg.pinv(Xc.T @ Xc)
+            for i in range(n):
+                for c in range(self.K):
+                    d2[i, c] = (X[i] - muG[c]) @ Sinv @ (X[i] - muG[c]).T
+        elif d == "Euclidean":
+            for i in range(n):
+                for c in range(self.K):
+                    d2[i, c] = (X[i] - muG[c]) @ (X[i] - muG[c]).T
+        return d2
 
     def confusion_matrix(self, G, d2):
         """
@@ -46,65 +75,36 @@ class Classify(object):
                d: Distance metric. By default Mahalanobis, Euclidean can be requested by user.
         :return: pcc, fraction of correct classifications.
         """
-        n = len(X)
-        K = len(G[0])
-        d2 = np.zeros([n, K])
-        confmat = np.zeros([K, K])
+        self.n = len(X)
+        self.K = len(G[0])
+        d2 = np.zeros([self.n, self.K])
+        confmat = np.zeros([self.K, self.K])
         muG = np.linalg.lstsq(G.T @ G, G.T @ X, rcond=None)[0]
-        Xc = np.zeros([n, len(X[0])])
-        for k in range(n):
-            if G[k][0] == 1:
-                Xc[k] = X[k] - muG[0]
-            else:
-                Xc[k] = X[k] - muG[1]
-        if d == "Mahalanobis":
-            Sinv = np.linalg.pinv(Xc.T @ Xc)
-            for i in range(n):
-                for c in range(K):
-                    d2[i, c] = (X[i] - muG[c]) @ Sinv @ (X[i] - muG[c]).T
-        elif d == "Euclidean":
-            for i in range(n):
-                for c in range(K):
-                    d2[i, c] = (X[i] - muG[c]) @ (X[i] - muG[c]).T
-
+        d2 = self.distance(X, muG, d)
         Ghat = np.argmin(d2, axis=1)
         Gr = np.argmax(G, axis=1)
-        for i in range(n):
+        for i in range(self.n):
             j = Gr[i]
             k = Ghat[i]
             confmat[j][k] = confmat[j][k] + 1
-        pcc = np.trace(confmat) / n
+        pcc = np.trace(confmat) / self.n
         return confmat, pcc, muG
 
-    def test_train(self, X, G, p):
-        n = len(X)
+    def test_train(self, X, G, p, d="Mahalanobis"):
+        self.n = len(X)
         self.K = len(G[0])
-        d2 = np.zeros([n, self.K])
-        sample_size = int(np.round(n * p))
-        training_idc = sample([k for k in range(n)], sample_size)
-        test_idc = [k for k in range(n) if k not in training_idc]
+        d2 = np.zeros([self.n, self.K])
+        sample_size = int(np.round(self.n * p))
+        training_idc = rd.sample([k for k in range(self.n)], sample_size)
+        test_idc = [k for k in range(self.n) if k not in training_idc]
         Xtrain = X[training_idc]
         Gtrain = G[training_idc]
         Xtest = X[test_idc]
         Gtest = G[test_idc]
         muG_train = np.linalg.lstsq(Gtrain.T @ Gtrain, Gtrain.T @ Xtrain, rcond=None)[0]
-
-        Xc_train = np.zeros([sample_size, len(X[0])])
-        for k in range(sample_size):
-            if G[k][0] == 1:
-                Xc_train[k] = Xtrain[k] - muG_train[0]
-            else:
-                Xc_train[k] = Xtrain[k] - muG_train[1]
-
-        Sinvtrain = np.linalg.pinv(Xc_train.T @ Xc_train)
-        for i in range(n - sample_size):
-            for c in range(self.K):
-                d2[i, c] = (Xtest[i] - muG_train[c]) @ Sinvtrain @ (Xtest[i] - muG_train[c]).T
-
-        conf_mat, ncc, pcc = self.confusion_matrix(Gtest, d2)
-        print(conf_mat)
-        print(ncc)
-        print(pcc)
+        d2 = self.distance(Xtest, Gtest, muG_train, d)
+        confmat, ncc, pcc = self.confusion_matrix(Gtest, d2)
+        return confmat, ncc, pcc
 
 
 if __name__ == "__main__":
@@ -137,9 +137,9 @@ if __name__ == "__main__":
                        join="inner")
     X = n_data.to_numpy().astype(float)
     G = cancelled.to_numpy().astype(float)
-
+    rd.seed(42)
     ins.test_train(X, G, .4)
 
-  #  confmat, pcc, muG = ins.LDA(X, G)
-  #  print(confmat)
-  #  print(pcc)
+    # confmat, pcc, muG = ins.LDA(X, G)
+    # print(confmat)
+    # print(pcc)
