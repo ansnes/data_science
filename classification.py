@@ -28,23 +28,13 @@ class Classify(object):
 
         """
         n = len(X)
-        d2 = np.zeros([n, self.K])
-        Xc = np.zeros([n, len(X[0])])
-        for k in range(n):
-            if G[k][0] == 1:
-                Xc[k] = X[k] - muG[0]
-            else:
-                Xc[k] = X[k] - muG[1]
+        Xc = np.array([X[k] - muG[0] if G[k][0]== 1 else X[k] - muG[1] for k in range(n)])
+
         if d == "Mahalanobis":
             Sinv = np.linalg.pinv(Xc.T @ Xc)
-            for i in range(n):
-                for c in range(self.K):
-                    d2[i, c] = (X[i] - muG[c]) @ Sinv @ (X[i] - muG[c]).T
+            return [[(X[i] - muG[c]) @ Sinv @ (X[i] - muG[c]).T for c in range(self.K)] for i in range(n)]
         elif d == "Euclidean":
-            for i in range(n):
-                for c in range(self.K):
-                    d2[i, c] = (X[i] - muG[c]) @ (X[i] - muG[c]).T
-        return d2
+            return [[(X[i] - muG[c]) @ (X[i] - muG[c]).T for c in range(self.K)] for i in range(n)]
 
     def confusion_matrix(self, G, d2):
         """
@@ -82,12 +72,12 @@ class Classify(object):
         return confmat, pcc, muG
 
     def test_train(self, X, G, p, d="Mahalanobis"):
-        self.n = len(X)
+        n = len(X)
         self.K = len(G[0])
-        d2 = np.zeros([self.n, self.K])
-        sample_size = int(np.round(self.n * p))
-        training_idc = rd.sample([k for k in range(self.n)], sample_size)
-        test_idc = [k for k in range(self.n) if k not in training_idc]
+        d2 = np.zeros([n, self.K])
+        sample_size = int(np.round(n * p))
+        training_idc = rd.sample([k for k in range(n)], sample_size)
+        test_idc = [k for k in range(n) if k not in training_idc]
         Xtrain = X[training_idc]
         Gtrain = G[training_idc]
         Xtest = X[test_idc]
@@ -129,8 +119,11 @@ if __name__ == "__main__":
     X = n_data.to_numpy().astype(float)
     G = cancelled.to_numpy().astype(float)
     rd.seed(42)
-    #ins.test_train(X, G, .4)
-
-    confmat, pcc, muG = ins.LDA(X, G)
+    confmat, ncc, pcc = ins.test_train(X, G, .4)
     print(confmat)
+    print(ncc)
     print(pcc)
+
+    # confmat, pcc, muG = ins.LDA(X, G)
+    # print(confmat)
+    # print(pcc)
