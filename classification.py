@@ -75,19 +75,10 @@ class Classify(object):
                d: Distance metric. By default Mahalanobis, Euclidean can be requested by user.
         :return: pcc, fraction of correct classifications.
         """
-        self.n = len(X)
         self.K = len(G[0])
-        d2 = np.zeros([self.n, self.K])
-        confmat = np.zeros([self.K, self.K])
         muG = np.linalg.lstsq(G.T @ G, G.T @ X, rcond=None)[0]
-        d2 = self.distance(X, muG, d)
-        Ghat = np.argmin(d2, axis=1)
-        Gr = np.argmax(G, axis=1)
-        for i in range(self.n):
-            j = Gr[i]
-            k = Ghat[i]
-            confmat[j][k] = confmat[j][k] + 1
-        pcc = np.trace(confmat) / self.n
+        d2 = self.distance(X, G, muG, d)
+        confmat, ncc, pcc = self.confusion_matrix(G, d2)
         return confmat, pcc, muG
 
     def test_train(self, X, G, p, d="Mahalanobis"):
@@ -138,8 +129,8 @@ if __name__ == "__main__":
     X = n_data.to_numpy().astype(float)
     G = cancelled.to_numpy().astype(float)
     rd.seed(42)
-    ins.test_train(X, G, .4)
+    #ins.test_train(X, G, .4)
 
-    # confmat, pcc, muG = ins.LDA(X, G)
-    # print(confmat)
-    # print(pcc)
+    confmat, pcc, muG = ins.LDA(X, G)
+    print(confmat)
+    print(pcc)
