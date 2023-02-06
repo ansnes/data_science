@@ -71,6 +71,9 @@ class Classify(object):
         confmat, ncc, pcc = self.confusion_matrix(G, d2)
         return confmat, pcc, muG
 
+    def QDA(self, X, G, basis="SVD"):
+        None
+
     def test_train(self, X, G, p, d="Mahalanobis"):
         n = len(X)
         self.K = len(G[0])
