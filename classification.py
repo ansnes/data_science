@@ -19,25 +19,31 @@ class Classify(object):
 
     def distance(self, X, G, muG, d):
         """
+        Gives the distance (Mahalanobis or Euclidean) for each measurement in X to group centers in muG.
 
         :param X: Data matrix from which function finds distances to group centers
         :param G: Matrix of group memberships (dummy)
         :param muG: Group centers
         :param d: distance metric. Euclidean or Mahalanobis
-        :return: d2 - square distances of all mesurements in X to all group centers.
+        :return: d2 - square distances of all measurements in X to all group centers.
 
         """
-        n = len(X)
-        Xc = np.array([X[k] - muG[0] if G[k][0]== 1 else X[k] - muG[1] for k in range(n)])
+        n = len(X)  # Number of measurements
 
+        #  Centering the measurements
+        Xc = np.array([X[k] - muG[0] if G[k][0] == 1 else X[k] - muG[1] for k in range(n)])
+
+        #  Finding squared distances
         if d == "Mahalanobis":
-            Sinv = np.linalg.pinv(Xc.T @ Xc)
+            Sinv = np.linalg.pinv(Xc.T @ Xc)  # Inverse of scaled covariance matrix
             return [[(X[i] - muG[c]) @ Sinv @ (X[i] - muG[c]).T for c in range(self.K)] for i in range(n)]
         elif d == "Euclidean":
             return [[(X[i] - muG[c]) @ (X[i] - muG[c]).T for c in range(self.K)] for i in range(n)]
 
     def confusion_matrix(self, G, d2):
         """
+        Constructs the confusion matrix for a classification. Returns matrix, number of correct classifications, and
+        proportion of correct classifications.
 
         :param G: Vector of group memberships, dummy variable form
         :param d2: Matrix of distances from group centers for every point that is to be predicted
@@ -45,16 +51,16 @@ class Classify(object):
                  ncc: number of correct classifications
                  pcc: proportion of correct classifications
         """
-        confmat = np.zeros([self.K, self.K])
-        Ghat = np.argmin(d2, axis=1)
-        Gr = np.argmax(G, axis=1)
-        n = len(G)
+        confmat = np.zeros([self.K, self.K])    # Init of confusion matrix
+        Ghat = np.argmin(d2, axis=1)            # Indices of least square distance, i.e. predicted group memberships
+        Gr = np.argmax(G, axis=1)               # Actual group memberships
+        n = len(G)                              # Number of measurements
         for i in range(n):
-            j = Gr[i]
-            k = Ghat[i]
-            confmat[j][k] = confmat[j][k] + 1
-        ncc = np.trace(confmat)
-        pcc = ncc / len(Gr)
+            j = Gr[i]                           # Defines each row in confmat to represent actual group
+            k = Ghat[i]                         # Defines each column in confmat to represent predicted group
+            confmat[j][k] = confmat[j][k] + 1   # Updates confmat
+        ncc = np.trace(confmat)                 # Number of correct classifications
+        pcc = ncc / n                           # Proportion of correct classifications
 
         return confmat, ncc, pcc
 
@@ -65,14 +71,20 @@ class Classify(object):
                d: Distance metric. By default Mahalanobis, Euclidean can be requested by user.
         :return: pcc, fraction of correct classifications.
         """
-        self.K = len(G[0])
-        muG = np.linalg.lstsq(G.T @ G, G.T @ X, rcond=None)[0]
-        d2 = self.distance(X, G, muG, d)
+        self.K = len(G[0])                                      # Number of groups
+        muG = np.linalg.lstsq(G.T @ G, G.T @ X, rcond=None)[0]  # Group centers
+        d2 = self.distance(X, G, muG, d)                        # Calculating group center distances to each point
+        # Getting confusion matrix and proportion and number of correct classifications
         confmat, ncc, pcc = self.confusion_matrix(G, d2)
         return confmat, pcc, muG
 
     def QDA(self, X, G, basis="SVD"):
-        None
+        n = len(X)      # Number of measurements
+        p = len(X[0])   # Number of variables
+        K = len(G[0])   # Number of group
+        nG = sum(G)     # Number of measurements for each group
+
+
 
     def test_train(self, X, G, p, d="Mahalanobis"):
         n = len(X)
