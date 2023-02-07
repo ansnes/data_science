@@ -10,6 +10,7 @@ LDA: Linear Discriminant Analysis.
 import numpy as np
 import pandas as pd
 import random as rd
+import matplotlib.pyplot as plt
 
 
 class Classify(object):
@@ -78,12 +79,22 @@ class Classify(object):
         confmat, ncc, pcc = self.confusion_matrix(G, d2)
         return confmat, pcc, muG
 
-    def QDA(self, X, G, basis="SVD"):
-        n = len(X)      # Number of measurements
-        p = len(X[0])   # Number of variables
-        K = len(G[0])   # Number of group
-        nG = sum(G)     # Number of measurements for each group
+    def lin_reg(self, X, G):
+        K = 2
+        n = len(X)
+        X = np.c_[np.ones(n), X]
+        Ghat = np.argmax(X @ np.linalg.lstsq(X.T @ X, X.T @ G, rcond=None)[0], axis=1)
+        Gr = np.argmax(G, axis=1)
+        confmat = np.zeros([K, K])
 
+        for i in range(n):
+            j = Gr[i]                           # Defines each row in confmat to represent actual group
+            k = Ghat[i]                         # Defines each column in confmat to represent predicted group
+            confmat[j][k] = confmat[j][k] + 1   # Updates confmat
+        ncc = np.trace(confmat)                 # Number of correct classifications
+        pcc = ncc / n                           # Proportion of correct classifications
+        print(confmat)
+        print(pcc)
 
 
     def test_train(self, X, G, p, d="Mahalanobis"):
@@ -133,12 +144,18 @@ if __name__ == "__main__":
                        join="inner")
     X = n_data.to_numpy().astype(float)
     G = cancelled.to_numpy().astype(float)
-    rd.seed(42)
-    confmat, ncc, pcc = ins.test_train(X, G, .4)
-    print(confmat)
-    print(ncc)
-    print(pcc)
+    # rd.seed(42)
+    # confmat, ncc, pcc = ins.test_train(X, G, .4)
+    # print(confmat)
+    # print(ncc)
+    # print(pcc)
 
     # confmat, pcc, muG = ins.LDA(X, G)
     # print(confmat)
     # print(pcc)
+
+    ins.lin_reg(X, G)
+
+
+
+
