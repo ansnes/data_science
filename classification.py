@@ -18,6 +18,29 @@ class Classify(object):
     def __init__(self):
         pass
 
+    def prop_data(self, col_a, col_b):
+        if (col_a + col_b).any() == 0:
+            return 0
+        else:
+            return col_a / (col_a + col_b)
+    def order_data(self, filepath, id_name, response):
+        data = pd.read_csv(filepath)    # Reads csv file into a pandas dataframe
+        y = data[[response]]            # Makes a separate pandas dataframe for the response column
+        data = data[[col for col in data if col not in [id_name, response]]]  # Removes id and response columns
+        data['prop_cancellations'] = self.prop_data(data['no_of_previous_cancellations'],
+                                                   data['no_of_previous_bookings_not_canceled'])
+        data = data.fillna(0)
+        return data, y
+
+    def make_numpy_arrays(self, data, y):
+        X = pd.concat([data[[col]]
+                       if data[[col]].dtypes.item() != "object"
+                       else pd.get_dummies(data[[col]])
+                       for col in data],
+                      axis=1, join="inner").to_numpy().astype(float)
+        G = pd.get_dummies(y).to_numpy().astype(float)
+        return X, G
+
     def wrangle(self, filepath, id_name, response):
         """
         Converts data from csv file to np.arrays when id and response columns are specified. Handles categorical
@@ -28,15 +51,9 @@ class Classify(object):
         :param response: response column name (str)
         :return: data matrix and response vector
         """
-        data = pd.read_csv(filepath)
-        y = data[[response]]
-        data = data[[col for col in data if col not in [id_name, response]]]
-        n_data = pd.concat([data[[col]]
-                           if data[[col]].dtypes.item() != "object"
-                           else pd.get_dummies(data[[col]]) for col in data],
-                          axis=1, join="inner")
-        return n_data.to_numpy().astype(float), pd.get_dummies(y).to_numpy().astype(float)
-
+        data, y = self.order_data(filepath, id_name, response)
+        X, G = self.make_numpy_arrays(data, y)
+        return X, G
 
     def distance(self, X, G, muG, d):
         """
@@ -61,7 +78,7 @@ class Classify(object):
         elif d == "Euclidean":
             return [[(X[i] - muG[c]) @ (X[i] - muG[c]).T for c in range(self.K)] for i in range(n)]
 
-    def confusion_matrix(self, G, d2):
+    def confusion_matrix(self, G, Ghat):
         """
         Constructs the confusion matrix for a classification. Returns matrix, number of correct classifications, and
         proportion of correct classifications.
@@ -73,7 +90,6 @@ class Classify(object):
                  pcc: proportion of correct classifications
         """
         confmat = np.zeros([self.K, self.K])    # Init of confusion matrix
-        Ghat = np.argmin(d2, axis=1)            # Indices of least square distance, i.e. predicted group memberships
         Gr = np.argmax(G, axis=1)               # Actual group memberships
         n = len(G)                              # Number of measurements
         for i in range(n):
@@ -95,26 +111,19 @@ class Classify(object):
         self.K = len(G[0])                                      # Number of groups
         muG = np.linalg.lstsq(G.T @ G, G.T @ X, rcond=None)[0]  # Group centers
         d2 = self.distance(X, G, muG, d)                        # Calculating group center distances to each point
+        Ghat = np.argmin(d2, axis=1)                            # Predicted group memberships
         # Getting confusion matrix and proportion and number of correct classifications
-        confmat, ncc, pcc = self.confusion_matrix(G, d2)
-        return confmat, pcc, muG
+        confmat, ncc, pcc = self.confusion_matrix(G, Ghat)
+        return confmat, ncc, pcc
 
     def lin_reg(self, X, G):
-        K = 2
+        self.K = len(G[0])
         n = len(X)
         X = np.c_[np.ones(n), X]
         Ghat = np.argmax(X @ np.linalg.lstsq(X.T @ X, X.T @ G, rcond=None)[0], axis=1)
         Gr = np.argmax(G, axis=1)
-        confmat = np.zeros([K, K])
-
-        for i in range(n):
-            j = Gr[i]                           # Defines each row in confmat to represent actual group
-            k = Ghat[i]                         # Defines each column in confmat to represent predicted group
-            confmat[j][k] = confmat[j][k] + 1   # Updates confmat
-        ncc = np.trace(confmat)                 # Number of correct classifications
-        pcc = ncc / n                           # Proportion of correct classifications
-        return ncc, pcc, confmat
-
+        confmat, ncc, pcc = self.confusion_matrix(G, Ghat)
+        return confmat, ncc, pcc
 
     def test_train(self, X, G, p, d="Mahalanobis"):
         n = len(X)
@@ -129,8 +138,43 @@ class Classify(object):
         Gtest = G[test_idc]
         muG_train = np.linalg.lstsq(Gtrain.T @ Gtrain, Gtrain.T @ Xtrain, rcond=None)[0]
         d2 = self.distance(Xtest, Gtest, muG_train, d)
-        confmat, ncc, pcc = self.confusion_matrix(Gtest, d2)
+        Ghat = np.argmin(d2, axis=1)
+        confmat, ncc, pcc = self.confusion_matrix(Gtest, Ghat)
         return confmat, ncc, pcc
+
+    def remove_one_variable(self, filepath, id_name, response, model):
+        data, y = self.order_data(filepath, id_name, response)
+        removed_variables = ['type_of_meal_plan',
+                             'arrival_month',
+                             'no_of_adults',
+                             'no_of_children',
+                             'arrival_date']
+        data = data[[col for col in data if col not in removed_variables]]
+        X, G = self.make_numpy_arrays(data, y)
+        variable_removed = "none"
+        if model == "LDA":
+            _, _, pcc = self.LDA(X, G)
+
+        elif model == "lin_reg":
+            _, _, pcc = self.lin_reg(X, G)
+
+        for col in data:
+            red_data = data[[col for col in data]]
+            removed_variable = red_data.pop(col).name
+            X, G = self.make_numpy_arrays(red_data, y)
+            if model == "LDA":
+                confmat, ncc, red_pcc = self.LDA(X, G)
+            elif model == "lin_reg":
+                confmat, ncc, red_pcc = self.lin_reg(X, G)
+            if red_pcc > pcc:
+                pcc = red_pcc
+                removed_variables.append(removed_variable)
+                break
+        print(pcc)
+        print(removed_variables[-1])
+        print(confmat)
+
+
 
 
 if __name__ == "__main__":
@@ -138,12 +182,11 @@ if __name__ == "__main__":
     file = "data/hotels.csv"
 
     X, G = ins.wrangle(file, 'Booking_ID', 'booking_status')
+
+    ins.remove_one_variable(file, 'Booking_ID', 'booking_status', "lin_reg")
+
     # print(X)
     # print(G)
-
-
-
-
 
     # rd.seed(42)
     # confmat, ncc, pcc = ins.test_train(X, G, .4)
@@ -151,8 +194,10 @@ if __name__ == "__main__":
     # print(ncc)
     # print(pcc)
 
-    confmat, pcc, muG = ins.LDA(X, G)
-    print(confmat)
-    print(pcc)
+    # confmat, ncc, pcc = ins.LDA(X, G)
+    # print(confmat)
+    # print(pcc)
 
-    # ins.lin_reg(X, G)
+    # confmat, ncc, pcc = ins.lin_reg(X, G)
+    # print(confmat)
+    # print(pcc)
