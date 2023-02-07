@@ -18,6 +18,26 @@ class Classify(object):
     def __init__(self):
         pass
 
+    def wrangle(self, filepath, id_name, response):
+        """
+        Converts data from csv file to np.arrays when id and response columns are specified. Handles categorical
+        variables by converting them to one dummy variable for each level.
+
+        :param filepath: path of csv data file
+        :param id_name:  id column name (str)
+        :param response: response column name (str)
+        :return: data matrix and response vector
+        """
+        data = pd.read_csv(filepath)
+        y = data[[response]]
+        data = data[[col for col in data if col not in [id_name, response]]]
+        n_data = pd.concat([data[[col]]
+                           if data[[col]].dtypes.item() != "object"
+                           else pd.get_dummies(data[[col]]) for col in data],
+                          axis=1, join="inner")
+        return n_data.to_numpy().astype(float), pd.get_dummies(y).to_numpy().astype(float)
+
+
     def distance(self, X, G, muG, d):
         """
         Gives the distance (Mahalanobis or Euclidean) for each measurement in X to group centers in muG.
@@ -93,8 +113,7 @@ class Classify(object):
             confmat[j][k] = confmat[j][k] + 1   # Updates confmat
         ncc = np.trace(confmat)                 # Number of correct classifications
         pcc = ncc / n                           # Proportion of correct classifications
-        print(confmat)
-        print(pcc)
+        return ncc, pcc, confmat
 
 
     def test_train(self, X, G, p, d="Mahalanobis"):
@@ -117,45 +136,23 @@ class Classify(object):
 if __name__ == "__main__":
     ins = Classify()
     file = "data/hotels.csv"
-    data = pd.read_csv(file)
 
-    # Wrangling. Removing the ID column and recoding the categorical variables
-    meals = pd.get_dummies(data.type_of_meal_plan)
-    rooms = pd.get_dummies(data.room_type_reserved)
-    segment_mapping = {"Offline": 0, "Online": 1}
-    cancelled = pd.get_dummies(data.booking_status)
-    # Numeric data, market_segment_type removed as it produced nan-values.
-    n_data = pd.concat([data.no_of_adults,
-                        data.no_of_children,
-                        data.no_of_weekend_nights,
-                        data.no_of_week_nights,
-                        meals,
-                        data.required_car_parking_space,
-                        rooms,
-                        data.lead_time,
-                        data.arrival_year,
-                        data.arrival_month,
-                        data.arrival_date,
-                        data.repeated_guest,
-                        data.no_of_previous_cancellations,
-                        data.avg_price_per_room,
-                        data.no_of_special_requests],
-                       axis=1,
-                       join="inner")
-    X = n_data.to_numpy().astype(float)
-    G = cancelled.to_numpy().astype(float)
+    X, G = ins.wrangle(file, 'Booking_ID', 'booking_status')
+    # print(X)
+    # print(G)
+
+
+
+
+
     # rd.seed(42)
     # confmat, ncc, pcc = ins.test_train(X, G, .4)
     # print(confmat)
     # print(ncc)
     # print(pcc)
 
-    # confmat, pcc, muG = ins.LDA(X, G)
-    # print(confmat)
-    # print(pcc)
+    confmat, pcc, muG = ins.LDA(X, G)
+    print(confmat)
+    print(pcc)
 
-    ins.lin_reg(X, G)
-
-
-
-
+    # ins.lin_reg(X, G)
