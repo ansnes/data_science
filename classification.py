@@ -23,13 +23,14 @@ class Classify(object):
             return 0
         else:
             return col_a / (col_a + col_b)
+
     def order_data(self, filepath, id_name, response):
         data = pd.read_csv(filepath)    # Reads csv file into a pandas dataframe
         y = data[[response]]            # Makes a separate pandas dataframe for the response column
         data = data[[col for col in data if col not in [id_name, response]]]  # Removes id and response columns
-        data['prop_cancellations'] = self.prop_data(data['no_of_previous_cancellations'],
-                                                   data['no_of_previous_bookings_not_canceled'])
-        data = data.fillna(0)
+        # data['prop_cancellations'] = self.prop_data(data['no_of_previous_cancellations'],
+        #                                            data['no_of_previous_bookings_not_canceled'])
+        # data = data.fillna(0)
         return data, y
 
     def make_numpy_arrays(self, data, y):
@@ -120,10 +121,10 @@ class Classify(object):
         self.K = len(G[0])
         n = len(X)
         X = np.c_[np.ones(n), X]
-        Ghat = np.argmax(X @ np.linalg.lstsq(X.T @ X, X.T @ G, rcond=None)[0], axis=1)
-        Gr = np.argmax(G, axis=1)
+        beta = np.linalg.lstsq(X.T @ X, X.T @ G, rcond=None)[0]
+        Ghat = np.argmax(X @ beta, axis=1)
         confmat, ncc, pcc = self.confusion_matrix(G, Ghat)
-        return confmat, ncc, pcc
+        return confmat, ncc, pcc, beta
 
     def test_train(self, X, G, p, d="Mahalanobis"):
         n = len(X)
@@ -148,7 +149,8 @@ class Classify(object):
                              'arrival_month',
                              'no_of_adults',
                              'no_of_children',
-                             'arrival_date']
+                             'arrival_date',
+                             'repeated_guest']
         data = data[[col for col in data if col not in removed_variables]]
         X, G = self.make_numpy_arrays(data, y)
         variable_removed = "none"
@@ -156,7 +158,7 @@ class Classify(object):
             _, _, pcc = self.LDA(X, G)
 
         elif model == "lin_reg":
-            _, _, pcc = self.lin_reg(X, G)
+            _, _, pcc, _ = self.lin_reg(X, G)
 
         for col in data:
             red_data = data[[col for col in data]]
@@ -165,7 +167,7 @@ class Classify(object):
             if model == "LDA":
                 confmat, ncc, red_pcc = self.LDA(X, G)
             elif model == "lin_reg":
-                confmat, ncc, red_pcc = self.lin_reg(X, G)
+                confmat, ncc, red_pcc, beta = self.lin_reg(X, G)
             if red_pcc > pcc:
                 pcc = red_pcc
                 removed_variables.append(removed_variable)
@@ -173,8 +175,7 @@ class Classify(object):
         print(pcc)
         print(removed_variables[-1])
         print(confmat)
-
-
+        print(beta)
 
 
 if __name__ == "__main__":
